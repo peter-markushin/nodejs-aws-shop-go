@@ -1,0 +1,148 @@
+definitions:
+  DTO.ProductRequest:
+    properties:
+      count:
+        minimum: 0
+        type: integer
+      description:
+        type: string
+      price:
+        minimum: 0
+        type: number
+      title:
+        type: string
+    required:
+    - count
+    - price
+    - title
+    type: object
+  DTO.ProductResponse:
+    properties:
+      count:
+        type: integer
+      description:
+        type: string
+      id:
+        type: string
+      price:
+        minimum: 0
+        type: number
+      title:
+        type: string
+    required:
+    - id
+    - price
+    - title
+    type: object
+  httputil.HTTPError:
+    properties:
+      code:
+        example: 400
+        type: integer
+      message:
+        example: status bad request
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /ping:
+    get:
+      description: do ping
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: ping
+      tags:
+      - Ping
+  /v1/products:
+    get:
+      consumes:
+      - application/vnd.api+json
+      description: List only available products
+      operationId: api.v1.products.available
+      produces:
+      - application/vnd.api+json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/DTO.ProductResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.HTTPError'
+      summary: List available products
+      tags:
+      - Products
+    post:
+      consumes:
+      - application/vnd.api+json
+      description: Add new product
+      operationId: api.v1.products.add
+      parameters:
+      - description: product data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/DTO.ProductRequest'
+      produces:
+      - application/vnd.api+json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/DTO.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.HTTPError'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/httputil.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.HTTPError'
+      summary: Add product
+      tags:
+      - Products
+  /v1/products/{id}:
+    get:
+      consumes:
+      - application/vnd.api+json
+      description: Get product by ID
+      operationId: api.v1.products.get
+      parameters:
+      - description: Product ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/vnd.api+json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/DTO.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httputil.HTTPError'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httputil.HTTPError'
+      summary: Get product
+      tags:
+      - Products
+swagger: "2.0"
