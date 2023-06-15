@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/peterm-itr/nodejs-aws-shop-go/controllers/DTO"
 	"github.com/peterm-itr/nodejs-aws-shop-go/models"
@@ -24,7 +25,7 @@ func NewProductController(repository repositories.IProductRepository) *ProductCo
 	}
 }
 
-// @BasePath /v1/products
+// @BasePath /prod
 
 // ListProducts godoc
 // @Summary		List products
@@ -113,7 +114,7 @@ func (u ProductController) ListAvailableProducts(c *gin.Context) {
 // @Failure		500	{object}	httputil.HTTPError
 // @Router		/v1/products/{id}	[get]
 func (u ProductController) GetProduct(c *gin.Context) {
-	log.Println("List Products")
+	log.Println("Get Product", fmt.Sprintf("%+v", c.Params))
 
 	if _, err := uuid.Parse(c.Param("id")); err != nil {
 		httputil.NewError(c, http.StatusBadRequest, errors.New("invalid product id"))
@@ -171,6 +172,8 @@ func (u ProductController) AddProduct(c *gin.Context) {
 
 		return
 	}
+
+	log.Println("Add Product", fmt.Sprintf("%+v", productDto))
 
 	productId := uuid.NewString()
 	newProduct := &models.Product{
