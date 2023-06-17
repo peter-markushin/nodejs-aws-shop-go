@@ -1,1 +1,0 @@
-# nodejs-aws-shop-go
