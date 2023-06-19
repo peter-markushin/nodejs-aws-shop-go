@@ -8,12 +8,12 @@ help:
 	@printf "\033[33mUsage:\033[0m\n  make TARGET\n\033[33m\nAvailable Commands:\n\033[0m"
 	@grep -E '^[a-zA-Z-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  [32m%-27s[0m %s\n", $$1, $$2}'
 
-build ./tmp/lambdaHandler:
-	cd app; GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ../tmp/lambdaHandler .
-	#cd tmp; zip -q lambda-handler.zip lambdaHandler
+.PHONY: build
+build:
+	./build-handlers.sh
 
-run:
-	cd app; go run main.go
+.PHONY: deploy
+deploy: build
+	if [ -z "$(email)" ]; then echo "Email is required"; exit 1; fi
+	cd infra; cdk deploy --parameters NotificationEmail=$(email)
 
-deploy: ./tmp/lambdaHandler
-	cd infra; cdk deploy

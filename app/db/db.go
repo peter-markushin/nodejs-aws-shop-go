@@ -14,7 +14,7 @@ var db *gorm.DB
 func Init(c *config.Configuration) {
 	var err error
 
-	dsn := fmt.Sprintf("user=%s password='%s' dbname=%s host=%s port=%s sslmode=require connect_timeout=2", c.DbUser, c.DbPassword, c.DbName, c.DbHost, c.DbPort)
+	dsn := fmt.Sprintf("user=%s password='%s' dbname=%s host=%s port=%s sslmode=%s connect_timeout=2", c.DbUser, c.DbPassword, c.DbName, c.DbHost, c.DbPort, c.DbSslMode)
 	db, err = gorm.Open(
 		postgres.Open(dsn),
 		&gorm.Config{},

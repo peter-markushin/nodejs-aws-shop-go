@@ -50,16 +50,7 @@ func (u ProductController) ListProducts(c *gin.Context) {
 		return
 	}
 
-	responseDTO := []DTO.ProductResponse{}
-
-	for _, p := range products {
-		responseDTO = append(responseDTO, DTO.ProductResponse{
-			Product: p,
-			Stock:   p.ProductStock,
-		})
-	}
-
-	c.JSON(http.StatusOK, responseDTO)
+	c.JSON(http.StatusOK, products)
 
 	return
 }
@@ -87,16 +78,7 @@ func (u ProductController) ListAvailableProducts(c *gin.Context) {
 		return
 	}
 
-	responseDTO := []DTO.ProductResponse{}
-
-	for _, p := range products {
-		responseDTO = append(responseDTO, DTO.ProductResponse{
-			Product: p,
-			Stock:   p.ProductStock,
-		})
-	}
-
-	c.JSON(http.StatusOK, responseDTO)
+	c.JSON(http.StatusOK, products)
 
 	return
 }
@@ -140,12 +122,7 @@ func (u ProductController) GetProduct(c *gin.Context) {
 		return
 	}
 
-	responseDTO := &DTO.ProductResponse{
-		Product: *product,
-		Stock:   product.ProductStock,
-	}
-
-	c.JSON(http.StatusOK, responseDTO)
+	c.JSON(http.StatusOK, product)
 
 	return
 }
@@ -181,7 +158,7 @@ func (u ProductController) AddProduct(c *gin.Context) {
 		Title:       productDto.Title,
 		Description: productDto.Description,
 		Price:       productDto.Price,
-		ProductStock: models.Stock{
+		ProductStock: &models.Stock{
 			ProductID: productId,
 			Count:     productDto.Count,
 		},
@@ -197,12 +174,7 @@ func (u ProductController) AddProduct(c *gin.Context) {
 		return
 	}
 
-	responseDTO := &DTO.ProductResponse{
-		Product: *product,
-		Stock:   product.ProductStock,
-	}
-
-	c.JSON(http.StatusCreated, responseDTO)
+	c.JSON(http.StatusCreated, product)
 
 	return
 }
