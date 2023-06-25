@@ -15,5 +15,6 @@ build:
 .PHONY: deploy
 deploy: build
 	if [ -z "$(email)" ]; then echo "Email is required"; exit 1; fi
-	cd infra; cdk deploy --parameters NotificationEmail=$(email)
+	if [ -z "$(additionalEmail)" ]; then echo "Email is required"; exit 1; fi
+	cd infra; cdk deploy --parameters NotificationEmail=$(email) --parameters AdditionalNotificationEmail=$(additionalEmail)
 

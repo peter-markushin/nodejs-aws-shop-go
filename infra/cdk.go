@@ -39,6 +39,10 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps) aw
 		Type: jsii.String("String"),
 	})
 
+	addititonalNotificationEmail := awscdk.NewCfnParameter(stack, jsii.String("AdditionalNotificationEmail"), &awscdk.CfnParameterProps{
+		Type: jsii.String("String"),
+	})
+
 	s3bucket := awss3.NewBucket(stack, jsii.String("RSAppBucket"), &awss3.BucketProps{
 		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
 		AutoDeleteObjects: jsii.Bool(true),
@@ -139,6 +143,16 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps) aw
 	importNotificationTopic.AddSubscription(awssnssubscriptions.NewEmailSubscription(
 		notificationEmail.ValueAsString(),
 		&awssnssubscriptions.EmailSubscriptionProps{Json: jsii.Bool(false)},
+	))
+
+	importNotificationTopic.AddSubscription(awssnssubscriptions.NewEmailSubscription(
+		addititonalNotificationEmail.ValueAsString(),
+		&awssnssubscriptions.EmailSubscriptionProps{
+			Json: jsii.Bool(false),
+			FilterPolicy: &map[string]awssns.SubscriptionFilter{
+				"price": awssns.SubscriptionFilter_NumericFilter(&awssns.NumericConditions{GreaterThan: jsii.Number(10)}),
+			},
+		},
 	))
 
 	productsHandlerFunc := awslambda.NewFunction(stack, jsii.String("API_Products"), &awslambda.FunctionProps{

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
-	"github.com/peterm-itr/nodejs-aws-shop-go/controllers/DTO"
 	"github.com/peterm-itr/nodejs-aws-shop-go/models"
 	"github.com/peterm-itr/nodejs-aws-shop-go/repositories"
 	"github.com/peterm-itr/nodejs-aws-shop-go/server"
@@ -55,17 +54,7 @@ func TestListProduct(t *testing.T) {
 	)
 	router.ServeHTTP(w, req)
 
-	productDTO := []DTO.ProductResponse{
-		{
-			Product: products[0],
-			Stock:   models.Stock{Count: 0},
-		},
-		{
-			Product: products[1],
-			Stock:   models.Stock{Count: 0},
-		},
-	}
-	productsJson, _ := json.Marshal(productDTO)
+	productsJson, _ := json.Marshal(products)
 
 	assert.Equal(t, 200, w.Code)
 	assert.Equal(t,
