@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/aws/jsii-runtime-go"
+	"github.com/google/uuid"
 	"github.com/peterm-itr/nodejs-aws-shop-go/config"
 	"github.com/peterm-itr/nodejs-aws-shop-go/models"
 	"io"
@@ -78,7 +79,10 @@ func (h UploadedCsvFileHandler) HandleUploadedCsvFile(ctx context.Context, event
 			productJson, err := json.Marshal(product)
 			messagesToSend = append(
 				messagesToSend,
-				types.SendMessageBatchRequestEntry{MessageBody: jsii.String(string(productJson))},
+				types.SendMessageBatchRequestEntry{
+					Id:          jsii.String(uuid.NewString()),
+					MessageBody: jsii.String(string(productJson)),
+				},
 			)
 
 			if err != nil {
