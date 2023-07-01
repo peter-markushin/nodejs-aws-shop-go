@@ -22,7 +22,7 @@ func (h ProductRepository) GetAll() ([]models.Product, error) {
 	var products []models.Product
 
 	db := db.GetDB()
-	result := db.Model(&models.Product{}).Preload("ProductStock").Find(&products).Limit(100)
+	result := db.Model(&models.Product{}).Preload("ProductStock").Find(&products).Limit(1000)
 
 	if result.Error != nil {
 		log.Println(result.Error)

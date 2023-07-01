@@ -10,21 +10,21 @@ RUN go mod download
 
 COPY ./ /app/
 
-RUN go build -o /lambdaHandler
+RUN go build -o /productsHandler handlers/productsHandler/main.go
 
 FROM build as dev
 
 RUN go install github.com/cespare/reflex@latest
 
-CMD reflex -g '**/*.go' go run main.go
+ENTRYPOINT reflex -g '**/*.go' go run /app/handlers/productsHandler/main.go
 
 FROM scratch as prod
 
 WORKDIR /
 
-COPY --from=build /lambdaHandler /lambdaHandler
+COPY --from=build /productsHandler /productsHandler
 
-CMD ["/lambdaHandler"]
+CMD ["/productsHandler"]
 
 
 

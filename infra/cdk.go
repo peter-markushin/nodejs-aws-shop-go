@@ -6,8 +6,14 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslambdaeventsources"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsrds"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3assets"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awss3notifications"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssns"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssnssubscriptions"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"strings"
@@ -28,6 +34,33 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps) aw
 	}
 
 	stack := awscdk.NewStack(scope, &id, &sprops)
+
+	notificationEmail := awscdk.NewCfnParameter(stack, jsii.String("NotificationEmail"), &awscdk.CfnParameterProps{
+		Type: jsii.String("String"),
+	})
+
+	addititonalNotificationEmail := awscdk.NewCfnParameter(stack, jsii.String("AdditionalNotificationEmail"), &awscdk.CfnParameterProps{
+		Type: jsii.String("String"),
+	})
+
+	s3bucket := awss3.NewBucket(stack, jsii.String("RSAppBucket"), &awss3.BucketProps{
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+		AutoDeleteObjects: jsii.Bool(true),
+		AccessControl:     awss3.BucketAccessControl_BUCKET_OWNER_FULL_CONTROL,
+		Cors: &[]*awss3.CorsRule{
+			{
+				AllowedMethods: &[]awss3.HttpMethods{
+					awss3.HttpMethods_PUT,
+				},
+				AllowedOrigins: jsii.Strings("https://d1xaanpmmg0wvm.cloudfront.net"),
+				AllowedHeaders: jsii.Strings("*"),
+			},
+		},
+	})
+
+	awscdk.NewCfnOutput(stack, jsii.String("BeBucket"), &awscdk.CfnOutputProps{
+		Value: s3bucket.BucketArn(),
+	})
 
 	vpc := awsec2.NewVpc(stack, jsii.String("RSAppVPC"), &awsec2.VpcProps{
 		VpcName:     jsii.String("rs-app-vpc"),
@@ -94,16 +127,45 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps) aw
 		Value: dbInstance.InstanceEndpoint().SocketAddress(),
 	})
 
-	productsFunc := awslambda.NewFunction(stack, jsii.String("API_Products"), &awslambda.FunctionProps{
+	productImportQueue := awssqs.NewQueue(stack, jsii.String("ProductImportQueue"), &awssqs.QueueProps{
+		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
+		QueueName:     jsii.String("catalogBatchProcess"),
+	})
+
+	awscdk.NewCfnOutput(stack, jsii.String("ProductImportQueueArn"), &awscdk.CfnOutputProps{
+		Value: productImportQueue.QueueArn(),
+	})
+
+	importNotificationTopic := awssns.NewTopic(stack, jsii.String("Import_Notifications"), &awssns.TopicProps{
+		TopicName: jsii.String("createProductTopic"),
+	})
+
+	importNotificationTopic.AddSubscription(awssnssubscriptions.NewEmailSubscription(
+		notificationEmail.ValueAsString(),
+		&awssnssubscriptions.EmailSubscriptionProps{Json: jsii.Bool(false)},
+	))
+
+	importNotificationTopic.AddSubscription(awssnssubscriptions.NewEmailSubscription(
+		addititonalNotificationEmail.ValueAsString(),
+		&awssnssubscriptions.EmailSubscriptionProps{
+			Json: jsii.Bool(false),
+			FilterPolicy: &map[string]awssns.SubscriptionFilter{
+				"price": awssns.SubscriptionFilter_NumericFilter(&awssns.NumericConditions{GreaterThan: jsii.Number(10)}),
+			},
+		},
+	))
+
+	productsHandlerFunc := awslambda.NewFunction(stack, jsii.String("API_Products"), &awslambda.FunctionProps{
 		Description: jsii.String("Products API function"),
 		Runtime:     awslambda.Runtime_GO_1_X(),
-		Handler:     jsii.String("lambdaHandler"),
+		Handler:     jsii.String("productsHandler"),
 		Code:        awslambda.Code_FromAsset(jsii.String("../tmp"), &awss3assets.AssetOptions{}),
 		Environment: &map[string]*string{
 			"DB_HOST":       dbInstance.InstanceEndpoint().Hostname(),
 			"DB_PORT":       jsii.String(strings.Split(*dbInstance.InstanceEndpoint().SocketAddress(), ":")[1]),
 			"DB_NAME":       jsii.String(DbName),
 			"DB_USER":       jsii.String(DbUser),
+			"DB_SSL_MODE":   jsii.String("require"),
 			"DB_SECRET_ARN": dbInstance.Secret().SecretFullArn(),
 		},
 		Vpc:        vpc,
@@ -114,16 +176,102 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps) aw
 		Timeout: awscdk.Duration_Seconds(jsii.Number(15)),
 	})
 
-	dbInstance.Secret().GrantRead(productsFunc, jsii.Strings("AWSCURRENT"))
+	dbInstance.Secret().GrantRead(productsHandlerFunc, jsii.Strings("AWSCURRENT"))
+
+	getImportUploadURLFunc := awslambda.NewFunction(stack, jsii.String("API_Products_Import"), &awslambda.FunctionProps{
+		Description: jsii.String("Import Products API function"),
+		Runtime:     awslambda.Runtime_GO_1_X(),
+		Handler:     jsii.String("getImportUploadURL"),
+		Code:        awslambda.Code_FromAsset(jsii.String("../tmp"), &awss3assets.AssetOptions{}),
+		Environment: &map[string]*string{
+			"S3_BUCKET_NAME": s3bucket.BucketName(),
+		},
+		Vpc:        vpc,
+		VpcSubnets: &awsec2.SubnetSelection{SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS},
+		SecurityGroups: &[]awsec2.ISecurityGroup{
+			lambdaSecurityGroup,
+		},
+		Timeout: awscdk.Duration_Seconds(jsii.Number(15)),
+	})
+
+	s3bucket.GrantReadWrite(getImportUploadURLFunc, "*")
+
+	importFileParserFunc := awslambda.NewFunction(stack, jsii.String("Products_Import_Parser"), &awslambda.FunctionProps{
+		Description: jsii.String("Parse imported products csv function"),
+		Runtime:     awslambda.Runtime_GO_1_X(),
+		Handler:     jsii.String("importFileParser"),
+		Code:        awslambda.Code_FromAsset(jsii.String("../tmp"), &awss3assets.AssetOptions{}),
+		Environment: &map[string]*string{
+			"S3_BUCKET_NAME":   s3bucket.BucketName(),
+			"IMPORT_QUEUE_URL": productImportQueue.QueueUrl(),
+		},
+		Vpc:        vpc,
+		VpcSubnets: &awsec2.SubnetSelection{SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS},
+		SecurityGroups: &[]awsec2.ISecurityGroup{
+			lambdaSecurityGroup,
+		},
+		Timeout: awscdk.Duration_Seconds(jsii.Number(15)),
+	})
+
+	productImportQueue.GrantSendMessages(importFileParserFunc)
+	s3bucket.GrantReadWrite(importFileParserFunc, jsii.String("*"))
+	s3bucket.AddObjectCreatedNotification(
+		awss3notifications.NewLambdaDestination(importFileParserFunc),
+		&awss3.NotificationKeyFilter{
+			Prefix: jsii.String("uploaded/"),
+		},
+	)
+
+	catalogBatchProcessFunc := awslambda.NewFunction(stack, jsii.String("Products_Import_From_Queue"), &awslambda.FunctionProps{
+		Description: jsii.String("Imported products from queue"),
+		Runtime:     awslambda.Runtime_GO_1_X(),
+		Handler:     jsii.String("catalogBatchProcess"),
+		Code:        awslambda.Code_FromAsset(jsii.String("../tmp"), &awss3assets.AssetOptions{}),
+		Environment: &map[string]*string{
+			"DB_HOST":                   dbInstance.InstanceEndpoint().Hostname(),
+			"DB_PORT":                   jsii.String(strings.Split(*dbInstance.InstanceEndpoint().SocketAddress(), ":")[1]),
+			"DB_NAME":                   jsii.String(DbName),
+			"DB_USER":                   jsii.String(DbUser),
+			"DB_SSL_MODE":               jsii.String("require"),
+			"DB_SECRET_ARN":             dbInstance.Secret().SecretFullArn(),
+			"IMPORT_NOTIFICATION_TOPIC": importNotificationTopic.TopicArn(),
+		},
+		Vpc:        vpc,
+		VpcSubnets: &awsec2.SubnetSelection{SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS},
+		SecurityGroups: &[]awsec2.ISecurityGroup{
+			lambdaSecurityGroup,
+		},
+		Timeout: awscdk.Duration_Seconds(jsii.Number(15)),
+	})
+
+	dbInstance.Secret().GrantRead(catalogBatchProcessFunc, jsii.Strings("AWSCURRENT"))
+	productImportQueue.GrantConsumeMessages(catalogBatchProcessFunc)
+	importNotificationTopic.GrantPublish(catalogBatchProcessFunc)
+
+	productImportEventSource := awslambdaeventsources.NewSqsEventSource(productImportQueue, &awslambdaeventsources.SqsEventSourceProps{
+		BatchSize:         jsii.Number(5),
+		MaxBatchingWindow: awscdk.Duration_Seconds(jsii.Number(30)),
+		Enabled:           jsii.Bool(true),
+	})
+	catalogBatchProcessFunc.AddEventSource(productImportEventSource)
 
 	apigw := awsapigateway.NewLambdaRestApi(stack, jsii.String("API_GW"), &awsapigateway.LambdaRestApiProps{
-		Handler: productsFunc,
+		Handler: productsHandlerFunc,
 		DefaultCorsPreflightOptions: &awsapigateway.CorsOptions{
 			AllowOrigins: awsapigateway.Cors_ALL_ORIGINS(),
 			AllowHeaders: awsapigateway.Cors_DEFAULT_HEADERS(),
 			AllowMethods: awsapigateway.Cors_ALL_METHODS(),
 		},
 	})
+
+	importResource := apigw.Root().AddResource(jsii.String("import"), &awsapigateway.ResourceOptions{})
+	importResource.AddMethod(
+		jsii.String("GET"),
+		awsapigateway.NewLambdaIntegration(getImportUploadURLFunc, &awsapigateway.LambdaIntegrationOptions{}),
+		&awsapigateway.MethodOptions{
+			RequestParameters: &map[string]*bool{"method.request.querystring.name": jsii.Bool(true)},
+		},
+	)
 
 	readDbSecretPolicy := awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Effect:  awsiam.Effect_ALLOW,
@@ -137,10 +285,15 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps) aw
 		Statements: &[]awsiam.PolicyStatement{readDbSecretPolicy},
 	})
 
-	productsFunc.Role().AttachInlinePolicy(readDbSecret)
+	productsHandlerFunc.Role().AttachInlinePolicy(readDbSecret)
+	catalogBatchProcessFunc.Role().AttachInlinePolicy(readDbSecret)
 
 	awscdk.NewCfnOutput(stack, jsii.String("LambdaListProducts_arn"), &awscdk.CfnOutputProps{
-		Value: productsFunc.FunctionArn(),
+		Value: productsHandlerFunc.FunctionArn(),
+	})
+
+	awscdk.NewCfnOutput(stack, jsii.String("LambdaImportProducts_arn"), &awscdk.CfnOutputProps{
+		Value: getImportUploadURLFunc.FunctionArn(),
 	})
 
 	awscdk.NewCfnOutput(stack, jsii.String("API_GW_URL"), &awscdk.CfnOutputProps{

@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// @BasePath /
+// @BasePath /prod
 
 type PingController struct{}
 
