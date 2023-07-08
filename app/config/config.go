@@ -9,6 +9,8 @@ import (
 var secretCache, _ = secretcache.New()
 
 type Configuration struct {
+	AppUser                 string `env:"APP_USER"`
+	AppPassword             string `env:"APP_PASSWORD"`
 	AppPort                 string `env:"APP_PORT"`
 	DbHost                  string `env:"DB_HOST"`
 	DbPort                  string `env:"DB_PORT"`

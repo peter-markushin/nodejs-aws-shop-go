@@ -16,6 +16,8 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
+	"github.com/joho/godotenv"
+	"os"
 	"strings"
 )
 
@@ -26,6 +28,8 @@ type CdkStackProps struct {
 func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps) awscdk.Stack {
 	const DbName = "rs_school"
 	const DbUser = "postgres"
+
+	godotenv.Load()
 
 	var sprops awscdk.StackProps
 
@@ -255,12 +259,42 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps) aw
 	})
 	catalogBatchProcessFunc.AddEventSource(productImportEventSource)
 
+	basicAuthorizerFunc := awslambda.NewFunction(stack, jsii.String("basicAuthorizerFunc"), &awslambda.FunctionProps{
+		Description: jsii.String("Products API basicAuthorizer"),
+		Runtime:     awslambda.Runtime_GO_1_X(),
+		Handler:     jsii.String("basicAuthorizer"),
+		Code:        awslambda.Code_FromAsset(jsii.String("../tmp"), &awss3assets.AssetOptions{}),
+		Environment: &map[string]*string{
+			"APP_USER":     jsii.String(os.Getenv("APP_USER")),
+			"APP_PASSWORD": jsii.String(os.Getenv("APP_PASSWORD")),
+		},
+		Vpc:        vpc,
+		VpcSubnets: &awsec2.SubnetSelection{SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS},
+		SecurityGroups: &[]awsec2.ISecurityGroup{
+			lambdaSecurityGroup,
+		},
+		Timeout: awscdk.Duration_Seconds(jsii.Number(1)),
+	})
+
 	apigw := awsapigateway.NewLambdaRestApi(stack, jsii.String("API_GW"), &awsapigateway.LambdaRestApiProps{
 		Handler: productsHandlerFunc,
 		DefaultCorsPreflightOptions: &awsapigateway.CorsOptions{
-			AllowOrigins: awsapigateway.Cors_ALL_ORIGINS(),
-			AllowHeaders: awsapigateway.Cors_DEFAULT_HEADERS(),
-			AllowMethods: awsapigateway.Cors_ALL_METHODS(),
+			AllowOrigins:     awsapigateway.Cors_ALL_ORIGINS(),
+			AllowHeaders:     awsapigateway.Cors_DEFAULT_HEADERS(),
+			AllowMethods:     awsapigateway.Cors_ALL_METHODS(),
+			AllowCredentials: jsii.Bool(false),
+		},
+	})
+
+	basicAuthorizer := awsapigateway.NewTokenAuthorizer(stack, jsii.String("basicAuthorizer"), &awsapigateway.TokenAuthorizerProps{
+		Handler: basicAuthorizerFunc,
+	})
+
+	apigw.AddGatewayResponse(jsii.String("Unauthorized"), &awsapigateway.GatewayResponseOptions{
+		Type: awsapigateway.ResponseType_DEFAULT_4XX(),
+		ResponseHeaders: &map[string]*string{
+			"Access-Control-Allow-Origin":  jsii.String("'*'"),
+			"Access-Control-Allow-Headers": jsii.String("'*'"),
 		},
 	})
 
@@ -270,6 +304,8 @@ func NewCdkStack(scope constructs.Construct, id string, props *CdkStackProps) aw
 		awsapigateway.NewLambdaIntegration(getImportUploadURLFunc, &awsapigateway.LambdaIntegrationOptions{}),
 		&awsapigateway.MethodOptions{
 			RequestParameters: &map[string]*bool{"method.request.querystring.name": jsii.Bool(true)},
+			AuthorizationType: awsapigateway.AuthorizationType_CUSTOM,
+			Authorizer:        basicAuthorizer,
 		},
 	)
 

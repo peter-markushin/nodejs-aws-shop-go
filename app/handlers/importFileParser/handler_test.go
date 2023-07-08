@@ -82,7 +82,9 @@ func TestHandleUploadedCsvFile(t *testing.T) {
 			gomock.Eq(&sqs.SendMessageBatchInput{
 				QueueUrl: &appConfig.ImportQueueUrl,
 				Entries: []types.SendMessageBatchRequestEntry{
-					{MessageBody: jsii.String("{\"id\":\"aaad9c29-a269-4ce9-9d53-0dd7bd55ea6c\",\"title\":\"P001\",\"description\":\"Test descr\",\"price\":\"29.9\",\"count\":65}")},
+					{
+						MessageBody: jsii.String("{\"id\":\"aaad9c29-a269-4ce9-9d53-0dd7bd55ea6c\",\"title\":\"P001\",\"description\":\"Test descr\",\"price\":\"29.9\",\"count\":65}"),
+					},
 				},
 			}),
 		).
